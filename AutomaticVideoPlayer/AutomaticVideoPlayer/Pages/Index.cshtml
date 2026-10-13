@@ -1,0 +1,166 @@
+﻿@page
+@model AutomaticVideoplayer.Pages.IndexModel
+
+@{
+    ViewData["Title"] = "Automatic Videoplayer";
+}
+
+<div class="container mt-5">
+    <h1>Automatic Videoplayer</h1>
+
+    <p>
+        Kies een video en stel in wanneer deze moet afspelen.
+    </p>
+
+    <div class="mb-3">
+        <label for="videoBestand" class="form-label">
+            Videobestand
+        </label>
+
+        <input type="file"
+               id="videoBestand"
+               class="form-control"
+               accept="video/*" />
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label for="starttijd" class="form-label">
+                Starttijd
+            </label>
+
+            <input type="time"
+                   id="starttijd"
+                   class="form-control"
+                   value="@Model.Planning.Starttijd.ToString("HH:mm")" />
+        </div>
+
+        <div class="col-md-4">
+            <label for="stoptijd" class="form-label">
+                Stoptijd
+            </label>
+
+            <input type="time"
+                   id="stoptijd"
+                   class="form-control"
+                   value="@Model.Planning.Stoptijd.ToString("HH:mm")" />
+        </div>
+    </div>
+
+    <div id="videoContainer" style="display: none;">
+        <h2 class="h4">Videospeler</h2>
+
+        <video id="videospeler"
+               controls
+               style="width: 100%; max-width: 800px;">
+        </video>
+
+        <p id="videoNaam" class="mt-2"></p>
+    </div>
+
+    <p id="melding" class="text-muted">
+        Selecteer een video om te beginnen.
+    </p>
+</div>
+
+<script>
+    const bestandKeuze = document.getElementById("videoBestand");
+    const videospeler = document.getElementById("videospeler");
+    const videoContainer = document.getElementById("videoContainer");
+    const videoNaam = document.getElementById("videoNaam");
+    const melding = document.getElementById("melding");
+    const starttijd = document.getElementById("starttijd");
+    const stoptijd = document.getElementById("stoptijd");
+
+    let huidigeVideoUrl = null;
+    let gestartDezePeriode = false;
+
+    bestandKeuze.addEventListener("change", function () {
+        const bestand = bestandKeuze.files[0];
+
+        if (!bestand) {
+            return;
+        }
+
+        if (!bestand.type.startsWith("video/")) {
+            melding.textContent = "Kies een geldig videobestand.";
+            return;
+        }
+
+        if (huidigeVideoUrl !== null) {
+            URL.revokeObjectURL(huidigeVideoUrl);
+        }
+
+        huidigeVideoUrl = URL.createObjectURL(bestand);
+        videospeler.src = huidigeVideoUrl;
+
+        videoContainer.style.display = "block";
+        videoNaam.textContent = "Bestand: " + bestand.name;
+        melding.textContent = "Video geselecteerd. De planning is actief.";
+
+        gestartDezePeriode = false;
+        controleerPlanning();
+    });
+
+    function controleerPlanning() {
+        const bestand = bestandKeuze.files[0];
+
+        if (!bestand || !starttijd.value || !stoptijd.value) {
+            return;
+        }
+
+        const nu = new Date();
+        const huidigeTijd =
+            nu.getHours() * 60 + nu.getMinutes();
+
+        const [startUur, startMinuut] =
+            starttijd.value.split(":").map(Number);
+
+        const [stopUur, stopMinuut] =
+            stoptijd.value.split(":").map(Number);
+
+        const start = startUur * 60 + startMinuut;
+        const stop = stopUur * 60 + stopMinuut;
+
+        if (start >= stop) {
+            melding.textContent =
+                "De stoptijd moet na de starttijd liggen.";
+            return;
+        }
+
+        const binnenPlanning =
+            huidigeTijd >= start && huidigeTijd < stop;
+
+        if (binnenPlanning && !gestartDezePeriode) {
+            gestartDezePeriode = true;
+
+            videospeler.play()
+                .then(() => {
+                    melding.textContent = "De video speelt automatisch af.";
+                })
+                .catch(() => {
+                    melding.textContent =
+                        "Automatisch afspelen is geblokkeerd. " +
+                        "Klik op Afspelen om de video te starten.";
+                    gestartDezePeriode = false;
+                });
+        }
+
+        if (!binnenPlanning) {
+            if (!videospeler.paused) {
+                videospeler.pause();
+                videospeler.currentTime = 0;
+            }
+
+            gestartDezePeriode = false;
+            melding.textContent =
+                "Buiten de planning. De video is gestopt.";
+        }
+    }
+
+    starttijd.addEventListener("change", controleerPlanning);
+    stoptijd.addEventListener("change", controleerPlanning);
+
+    // Controleer iedere seconde of de video moet starten of stoppen.
+    setInterval(controleerPlanning, 1000);
+</script>
